@@ -2,115 +2,128 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <title>Live River Water Quality Dashboard - Stable (All Sensors)</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>🌊 Ocean-Themed Water Quality Dashboard</title>
   <script src="https://cdn.plot.ly/plotly-latest.min.js"></script>
   <style>
     body {
-      font-family: Arial, sans-serif;
-      background: #f0f4f8;
+      background: linear-gradient(to bottom, #003366, #005f99);
+      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+      color: #e0f7fa;
       margin: 0;
-      padding: 20px;
+      padding: 0;
     }
     h1 {
       text-align: center;
-      color: #0077b6;
-      margin-bottom: 30px;
-    }
-    .chart-box {
-      width: 90%;
-      max-width: 1000px;
-      margin: 30px auto;
-      background: white;
-      border-radius: 10px;
-      box-shadow: 0 2px 8px rgba(0,0,0,0.1);
       padding: 20px;
+      background: rgba(0, 102, 153, 0.8);
+      margin: 0;
+      font-size: 2rem;
     }
-    .info-box {
-      text-align: center;
-      font-size: 15px;
-      margin-top: 5px;
-      color: #333;
+    .tabs {
+      display: flex;
+      justify-content: center;
+      background-color: rgba(0, 51, 102, 0.6);
+      padding: 10px 0;
+    }
+    .tab {
+      background: #007acc;
+      border: none;
+      padding: 10px 20px;
+      margin: 0 5px;
+      color: white;
+      font-size: 1rem;
+      cursor: pointer;
+      border-radius: 5px;
+    }
+    .tab:hover {
+      background: #005f99;
+    }
+    .tab.active {
+      background: #003f5c;
+    }
+    .chart-container {
+      max-width: 1000px;
+      margin: 20px auto;
+      display: none;
+    }
+    .chart-container.active {
+      display: block;
     }
   </style>
 </head>
 <body>
-  <h1>📊 River Water Quality Dashboard — Stable with All Parameters</h1>
-
-  <div class="chart-box"><div id="phChart"></div><div class="info-box" id="phInfo"></div></div>
-  <div class="chart-box"><div id="doChart"></div><div class="info-box" id="doInfo"></div></div>
-  <div class="chart-box"><div id="salinityChart"></div><div class="info-box" id="salinityInfo"></div></div>
-  <div class="chart-box"><div id="ammoniumChart"></div><div class="info-box" id="ammoniumInfo"></div></div>
-  <div class="chart-box"><div id="chlorophyllChart"></div><div class="info-box" id="chlorophyllInfo"></div></div>
+  <h1>🌊 Real-Time Ocean-Themed Water Quality Dashboard</h1>
+  <div class="tabs">
+    <button class="tab active" data-chart="ph">pH</button>
+    <button class="tab" data-chart="do">Dissolved Oxygen</button>
+    <button class="tab" data-chart="salinity">Salinity</button>
+    <button class="tab" data-chart="ammonium">Ammonium</button>
+    <button class="tab" data-chart="chlorophyll">Chlorophyll</button>
+  </div>
+  <div id="ph" class="chart-container active"><div id="phChart"></div></div>
+  <div id="do" class="chart-container"><div id="doChart"></div></div>
+  <div id="salinity" class="chart-container"><div id="salinityChart"></div></div>
+  <div id="ammonium" class="chart-container"><div id="ammoniumChart"></div></div>
+  <div id="chlorophyll" class="chart-container"><div id="chlorophyllChart"></div></div>
 
   <script>
-    let chartCreated = {};
-
-    const traceTemplate = (label, color) => ({
-      x: [],
-      y: [],
-      mode: 'lines',
-      type: 'scatter',
-      name: label,
-      line: { shape: 'linear', color: color, width: 1 }
-    });
-
-    const layoutTemplate = (label) => ({
-      margin: { t: 40 },
-      dragmode: 'zoom',
-      uirevision: 'static',
-      xaxis: { title: 'Time', type: 'date', autorange: true, showgrid: true },
-      yaxis: { title: label, showgrid: true },
-      hovermode: 'closest'
-    });
-
-    const sensors = [
-      { id: 'phChart', info: 'phInfo', label: 'pH', field: 'ph', color: '#f9844a' },
-      { id: 'doChart', info: 'doInfo', label: 'Dissolved Oxygen (mg/L)', field: 'do', color: '#0077b6' },
-      { id: 'salinityChart', info: 'salinityInfo', label: 'Salinity (ppt)', field: 'salinity', color: '#90be6d' },
-      { id: 'ammoniumChart', info: 'ammoniumInfo', label: 'Ammonium (mg/L)', field: 'ammonium', color: '#ff6b6b' },
-      { id: 'chlorophyllChart', info: 'chlorophyllInfo', label: 'Chlorophyll (μg/L)', field: 'chlorophyll', color: '#6a4c93' }
-    ];
-
-    async function fetchAndUpdate() {
+    const fetchData = async () => {
       const res = await fetch('/api/history');
-      const raw = await res.json();
-
-      const data = raw.map(d => ({
-        x: new Date(d.timestamp),
+      const data = await res.json();
+      return data.map(d => ({
+        t: new Date(d.timestamp),
         ph: d.ph,
         do: d.dissolved_oxygen,
         salinity: d.salinity,
         ammonium: d.ammonium,
         chlorophyll: d.chlorophyll
       }));
+    };
 
-      sensors.forEach(sensor => {
-        const xVals = data.map(d => d.x);
-        const yVals = data.map(d => d[sensor.field]);
-
-        if (!chartCreated[sensor.id]) {
-          Plotly.newPlot(sensor.id, [{
-            ...traceTemplate(sensor.label, sensor.color),
-            x: xVals,
-            y: yVals
-          }], layoutTemplate(sensor.label), { responsive: true, scrollZoom: true });
-
-          document.getElementById(sensor.id).on('plotly_click', function(evt) {
-            const pt = evt.points[0];
-            const time = new Date(pt.x).toLocaleString("en-GB", { hour12: false });
-            const val = pt.y.toFixed(2);
-            document.getElementById(sensor.info).innerText = `📌 Time: ${time}, ${sensor.label}: ${val}`;
-          });
-
-          chartCreated[sensor.id] = true;
-        } else {
-          Plotly.update(sensor.id, { x: [xVals], y: [yVals] });
-        }
+    const createChart = async (chartId, label, field, color) => {
+      const data = await fetchData();
+      Plotly.newPlot(chartId, [{
+        x: data.map(d => d.t),
+        y: data.map(d => d[field]),
+        type: 'scatter',
+        mode: 'lines',
+        name: label,
+        line: { color: color, width: 2 }
+      }], {
+        paper_bgcolor: 'rgba(0,0,0,0)',
+        plot_bgcolor: 'rgba(0,0,0,0)',
+        font: { color: '#e0f7fa' },
+        xaxis: { title: 'Time' },
+        yaxis: { title: label },
+        margin: { t: 20, b: 50 }
       });
-    }
+    };
 
-    fetchAndUpdate();
-    setInterval(fetchAndUpdate, 30000);
+    createChart("phChart", "pH", "ph", "#ffb74d");
+    createChart("doChart", "Dissolved Oxygen (mg/L)", "do", "#4dd0e1");
+    createChart("salinityChart", "Salinity (ppt)", "salinity", "#81c784");
+    createChart("ammoniumChart", "Ammonium (mg/L)", "ammonium", "#e57373");
+    createChart("chlorophyllChart", "Chlorophyll (μg/L)", "chlorophyll", "#ba68c8");
+
+    // Tab switching
+    const tabs = document.querySelectorAll('.tab');
+    const charts = document.querySelectorAll('.chart-container');
+
+    tabs.forEach(tab => {
+      tab.addEventListener('click', () => {
+        tabs.forEach(t => t.classList.remove('active'));
+        tab.classList.add('active');
+
+        const chartToShow = tab.dataset.chart;
+        charts.forEach(chart => {
+          chart.classList.remove('active');
+          if (chart.id === chartToShow) {
+            chart.classList.add('active');
+          }
+        });
+      });
+    });
   </script>
 </body>
 </html>
